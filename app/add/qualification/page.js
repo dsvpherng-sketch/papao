@@ -1,154 +1,225 @@
 "use client";
-import React from 'react';
+
+import React, { useMemo } from 'react';
 import ResponsiveAppBar from '../../component/nav.js';
 import Sidebar from '../../component/Sidebar.js';
-import { Button, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem } from '@mui/material';
+import { 
+  Button, Paper, Dialog, DialogTitle, DialogContent, 
+  DialogActions, TextField, Box, Typography,
+  MenuItem, FormControl, InputLabel, Select
+} from '@mui/material'; 
 import { DataGrid } from '@mui/x-data-grid';
-export default function QualificationPage() {
-  const [rows, setRows] = React.useState([{ id: 1, name: 'ປະລິນຍາຕີ', level: 'ລະດັບຕົ້ນ' }]);
+import { createClient } from "../../../lib/supabase/client";
 
-  const schoolYears = React.useMemo(() => {
-    const currentYear = new Date().getFullYear();
-    const startYear = currentYear - 10;
-    const endYear = currentYear + 1;
-    const years = [];
-    for (let y = startYear; y <= endYear; y += 1) {
-      years.push(`${y}-${y + 1}`);
-    }
-    return years.reverse();
-  }, []);
+export default function EduYearPage() {
+  const supabase = createClient();
 
+  const [rows, setRows] = React.useState([]);
   const [open, setOpen] = React.useState(false);
   const [isEdit, setIsEdit] = React.useState(false);
   const [editId, setEditId] = React.useState(null);
-  const [formData, setFormData] = React.useState({ name: '', level: '' });
+  
+  // ปรับชื่อ field ให้ตรงกับ Database (สมมติว่าเป็น edu_year)
+  const [formData, setFormData] = React.useState({ 
+    edu_year: '', 
+    edu_generation: '' 
+  });
 
-  const handleClickOpen = () => {
+  // สร้างรายการปีอัตโนมัติ (ใช้ useMemo เพื่อประสิทธิภาพ)
+  const yearOptions = useMemo(() => {
+    const startYear = 2010;
+    const currentYear = new Date().getFullYear();
+    const yearsToFuture = 3;
+    const options = [];
+    for (let year = startYear; year <= currentYear + yearsToFuture; year++) {
+      options.push(`${year}-${year + 1}`);
+    }
+    return options;
+  }, []);
+
+  const fetchEduYears = React.useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from("qualification") 
+        .select("*")
+        .order('edu_year_id', { ascending: false });
+      
+      if (error) throw error;
+      if (data) setRows(data);
+    } catch (error) {
+      console.error("Error fetching data:", error.message);
+    }
+  }, [supabase]);
+
+  React.useEffect(() => {
+    fetchEduYears();
+  }, [fetchEduYears]);
+
+  const handleOpen = () => {
     setIsEdit(false);
-    setEditId(null);
-    setFormData({ name: '', level: '' });
+    setFormData({ edu_year: '', edu_generation: '' }); // Reset ค่า
     setOpen(true);
   };
 
-  const handleClose = () => {
-    setOpen(false);
-    setIsEdit(false);
-    setEditId(null);
-  };
+  const handleClose = () => setOpen(false);
 
-  const handleSave = () => {
-    if (!formData.name || !formData.level) return alert('ກະລຸນາກອກຂໍ້ມູນໃຫ້ຄົບ!');
+  const handleSave = async () => {
+    if (!formData.edu_year || !formData.edu_generation) {
+      return alert("ກະລຸນາກອກຂໍ້ມູນໃຫ້ຄົບ!");
+    }
+
+    const payload = { 
+      edu_year: formData.edu_year, 
+      edu_generation: formData.edu_generation 
+    };
 
     if (isEdit) {
-      setRows((prev) => prev.map((r) => (r.id === editId ? { ...r, ...formData } : r)));
+      // --- ส่วนการแก้ไข (Update) ---
+      const { error } = await supabase
+        .from("qualification")
+        .update(payload)
+        .eq('edu_year_id', editId);
+
+      if (!error) {
+        setRows(rows.map((row) => row.edu_year_id === editId ? { ...row, ...payload } : row));
+        handleClose();
+      } else {
+        alert("Error updating: " + error.message);
+      }
     } else {
-      const newRow = { id: rows.length + 1, ...formData };
-      setRows((prev) => [...prev, newRow]);
-    }
-
-    handleClose();
-  };
-
-  const handleEdit = (id) => {
-    const rowToEdit = rows.find((r) => r.id === id);
-    if (rowToEdit) {
-      setFormData({ name: rowToEdit.name || '', level: rowToEdit.level || '' });
-      setEditId(id);
-      setIsEdit(true);
-      setOpen(true);
+      // --- ส่วนการเพิ่ม (Insert) ---
+      const { data, error } = await supabase
+        .from("qualification")
+        .insert([payload])
+        .select();
+      
+      if (!error && data) {
+        setRows([data[0], ...rows]);
+        handleClose();
+      } else {
+        alert("Error inserting: " + error.message);
+      }
     }
   };
 
-  const handleDelete = (id) => {
-    if (confirm('ທ່ານແນ່ໃຈບໍ່ວ່າຈະລຶບ?')) {
-      setRows((prev) => prev.filter((r) => r.id !== id));
+  const handleDelete = async (id) => {
+    if (window.confirm('ທ່ານແນ່ໃຈບໍ່ວ່າຈະລຶບ?')) {
+      const { error } = await supabase
+        .from("qualification")
+        .delete()
+        .eq('edu_year_id', id);
+
+      if (!error) {
+        setRows(rows.filter(r => r.edu_year_id !== id));
+      }
     }
   };
 
   const columns = [
-    { field: 'id', headerName: 'ລຳດັບ', width: 70 },
-    { field: 'name', headerName: 'ສົກຮຽນ', width: 300 },
-    { field: 'level', headerName: 'ລຸ້ນທີ່', width: 200 },
-    { field: 'actions', headerName: 'ຈັດການ', width: 150, sortable: false, renderCell: (params) => (
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', height: '100%' }}>
-          <button
-            onClick={() => handleEdit(params.row.id)}
-            style={{ padding: '5px 10px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', width: '70px', height: '32px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+    { 
+      field: 'id_display', 
+      headerName: 'ລຳດັບ', 
+      flex: 0.5,
+      renderCell: (params) => rows.findIndex(r => r.edu_year_id === params.row.edu_year_id) + 1
+    },
+    { field: 'edu_year', headerName: 'ສົກຮຽນ', flex: 1 }, 
+    { field: 'edu_generation', headerName: 'ລຸ້ນທີ', flex: 1 },
+    {
+      field: 'actions',
+      headerName: 'ຈັດການ',
+      flex: 1,
+      sortable: false,
+      renderCell: (params) => (
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', height: '100%' }}>
+          <Button 
+            size="small" variant="contained" color="success" 
+            onClick={() => {
+              setIsEdit(true);
+              setEditId(params.row.edu_year_id);
+              // นำค่าจาก row มาใส่ใน state เพื่อแสดงใน Dialog
+              setFormData({ 
+                edu_year: params.row.edu_year, 
+                edu_generation: params.row.edu_generation 
+              });
+              setOpen(true);
+            }}
           >
             ແກ້ໄຂ
-          </button>
-          <button
-            onClick={() => handleDelete(params.row.id)}
-            style={{ padding: '5px 10px', backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', width: '70px', height: '32px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+          </Button>
+          <Button 
+            size="small" variant="contained" color="error" 
+            onClick={() => handleDelete(params.row.edu_year_id)}
           >
             ລຶບ
-          </button>
-        </div>
+          </Button>
+        </Box>
       ),
     },
   ];
-  return (
-    <div>
-      <div className="h-20 w-[100dvw] fixed bg-white ">
-        <ResponsiveAppBar />
-        <div className="h-[100dvh] w-[100dvw] border ">
-          <div>
-            <div className="h-[100dvh] w-[80dvw] ml-[240px] pt-20 ">
-              <div className="h-[100dvh] w-[82dvw] mt-16 ">
-                <div className="p-6">
-                  <h2 className="text-xl font-semibold mb-4">ຈັດການຂໍ້ມູນສົກສຶກສາ</h2>
-                  <Button
-                    variant="contained"
-                    onClick={handleClickOpen}
-                    sx={{ mb: 3, bgcolor: '#8B0000', '&:hover': { bgcolor: '#a00000' } }}
-                  >
-                    ເພີ່ມຂໍ້ມູນສົກສຶກສາ
-                  </Button>
-                  <Paper sx={{ height: 500, width: '100%' }}>
-                    <DataGrid rows={rows} columns={columns} pageSizeOptions={[5, 10]} disableRowSelectionOnClick />
-                  </Paper>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
 
-      <div className="h-[100dvh] w-[20dvw] ">
+  return (
+    <div className="flex h-screen w-screen overflow-hidden bg-gray-100">
+      <div className="relative z-[100] w-[240px] flex-shrink-0">
         <Sidebar />
       </div>
+      <div className="flex-1 flex flex-col relative">
+        <div className="h-16 w-full flex-shrink-0 relative z-[50]">
+          <ResponsiveAppBar />
+        </div>
+        <main className="flex-1 overflow-y-auto p-6 relative z-10">
+          <div className="bg-white p-6 rounded-lg shadow-md min-h-full">
+            <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 6 }}>
+              ຈັດການຂໍ້ມູນສົກຮຽນ
+            </Typography>
+            <div className="mb-6">
+              <Button variant="contained" onClick={handleOpen} sx={{ bgcolor: '#8B0000', '&:hover': { bgcolor: '#a00000' } }}>
+                ເພີ່ມຂໍ້ມູນ
+              </Button>
+            </div>
+            <Paper sx={{ height: 600, width: '100%', boxShadow: '0px 2px 4px rgba(0,0,0,0.05)', borderRadius: 2, position: 'relative', zIndex: 1 }}>
+              <DataGrid 
+                rows={rows} 
+                columns={columns} 
+                getRowId={(row) => row.edu_year_id} 
+                pageSizeOptions={[10, 25, 50, 100]}
+                initialState={{ pagination: { paginationModel: { page: 0, pageSize: 50 } } }}
+                disableRowSelectionOnClick
+                sx={{ border: 0, '& .MuiDataGrid-cell:focus': { outline: 'none' } }}
+              />
+            </Paper>
+          </div>
+        </main>
+      </div>
 
-      <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm">
+      {/* Dialog สำหรับ เพิ่ม/แก้ไข */}
+      <Dialog open={open} onClose={handleClose} fullWidth maxWidth="xs">
         <DialogTitle sx={{ bgcolor: '#8B0000', color: 'white' }}>
-          {isEdit ? 'ແກ້ໄຂຂໍ້ມູນສົກສຶກສາ' : 'ຟອມເພີ່ມຂໍ້ມູນສົກສຶກສາ'}
+          {isEdit ? "ແກ້ໄຂຂໍ້ມູນ" : "ເພີ່ມຂໍ້ມູນໃໝ່"}
         </DialogTitle>
         <DialogContent sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <TextField
-            label="ສົກຮຽນ"
-            select
-            value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            fullWidth
-          >
-            {schoolYears.map((sy) => (
-              <MenuItem key={sy} value={sy}>
-                {sy}
-              </MenuItem>
-            ))}
-          </TextField>
-          <TextField
-            label="ລຸ້ນທີ່"
-            value={formData.level}
-            onChange={(e) => setFormData({ ...formData, level: e.target.value })}
-            fullWidth
+          <FormControl fullWidth>
+            <InputLabel>ສົກຮຽນ</InputLabel>
+            <Select
+              value={formData.edu_year}
+              label="ສົກຮຽນ"
+              onChange={(e) => setFormData({ ...formData, edu_year: e.target.value })}
+            >
+              {yearOptions.map((year) => (
+                <MenuItem key={year} value={year}>{year}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <TextField 
+            fullWidth 
+            label="ລຸ້ນທີ" 
+            value={formData.edu_generation} 
+            onChange={(e) => setFormData({ ...formData, edu_generation: e.target.value })} 
           />
         </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
-          <Button onClick={handleClose} color="inherit">
-            ຍົກເລີກ
-          </Button>
+        <DialogActions sx={{ p: 3 }}>
+          <Button onClick={handleClose}>ຍົກເລີກ</Button>
           <Button onClick={handleSave} variant="contained" color="success">
-            {isEdit ? 'ອັບເດດຂໍ້ມູນ' : 'ບັນທຶກຂໍ້ມູນ'}
+            {isEdit ? "ອັບເດດ" : "ບັນທຶກ"}
           </Button>
         </DialogActions>
       </Dialog>

@@ -1,91 +1,198 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import ResponsiveAppBar from '../../component/nav.js'; 
 import Sidebar from '../../component/Sidebar.js';
 import { 
   Button, Paper, Box, Dialog, DialogTitle, 
-  DialogContent, DialogActions, TextField, MenuItem
+  DialogContent, DialogActions, TextField, MenuItem, Typography, Avatar
 } from '@mui/material'; 
 import { DataGrid } from '@mui/x-data-grid';
+import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+// --- ນຳເຂົ້າ Supabase ແລະ ImageUpload ---
+import { createClient } from "../../../lib/supabase/client"; 
+import { ImageUpload } from "../../../services/action.js";
 
 export default function PermissionPage() {
-  // 1. State ສໍາລັບເກັບຂໍ້ມູນໃນຕາລາງ
-  const [rows, setRows] = useState([
-    { id: 1, name: 'ປານຕາວັນ', nameEng: 'Pantanvan', gender: 'ຍິງ', phone: '02055793936', email: 'test@mail.com', status: 'ບໍ່ລະບຸ', permission: 'ອາດີດນັກສຶກສາ' }
-  ]);
+  const supabase = createClient(); 
 
-  // 2. State ສໍາລັບ Dialog ແລະ Form
+  const [rows, setRows] = useState([]);
   const [open, setOpen] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
+  const [editId, setEditId] = useState(null);
+  const [imageUrl, setImageUrl] = useState(null); // ເກັບ URL ທີ່ໄດ້ຈາກ Cloudinary/S3
+  const [isClient, setIsClient] = useState(false);
+  
   const [formData, setFormData] = useState({
-    id: null, name: '', nameEng: '', gender: '', phone: '', email: '', status: 'ບໍ່ລະບຸ', permission: 'ອາດີດນັກສຶກສາ'
+    name: '',
+    nameEng: '',
+    gender: '',
+    phone: '',
+    email: '',
+    image: '',
+    status: 'ບໍ່ລະບຸ',
+    permission: 'ອາດີດນັກສຶກສາ',
+    password: ''
   });
 
-  // 3. Functions ຈັດການການເປີດ-ປິດ Dialog
-  const handleClickOpen = () => {
-    setIsEdit(false);
-    setFormData({ id: null, name: '', nameEng: '', gender: '', phone: '', email: '', status: 'ບໍ່ລະບຸ', permission: 'ອາດີດນັກສຶກສາ' });
-    setOpen(true);
+  // 1. ດຶງຂໍ້ມູນຈາກ Supabase
+  const getdata = useCallback(async () => {
+    // ສົມມຸດວ່າ Table ໃນ Database ຊື່ "permissions"
+    const { data, error } = await supabase.from("permissions").select("*").order('id', { ascending: true }); 
+    if (data) setRows(data);
+    if (error) console.error("Error fetching:", error);
+  }, [supabase]);
+
+  useEffect(() => {
+    setIsClient(true);
+    getdata();
+  }, [getdata]);
+
+  // 2. ການຈັດການຮູບພາບ
+  const handleImageChange = async (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      // ສະແດງ Preview ໃຫ້ຜູ້ໃຊ້ເຫັນກ່ອນ
+      const previewUrl = URL.createObjectURL(file);
+      setFormData({ ...formData, image: previewUrl });
+
+      // Upload ໄປ server ແລ້ວເອົາ URL ແທ້ເກັບໄວ້ໃນ state
+      const uploadedUrl = await ImageUpload(file);
+      setImageUrl(uploadedUrl);
+    }
   };
 
-  const handleEdit = (row) => {
-    setIsEdit(true);
-    setFormData(row);
+  const handleClickOpen = () => {
+    setIsEdit(false);
+    setEditId(null);
+    setImageUrl(null);
+    setFormData({
+      name: '', nameEng: '', gender: '', phone: '', email: '', image: '', status: 'ບໍ່ລະບຸ', permission: 'ອາດີດນັກສຶກສາ', password: ''
+    });
     setOpen(true);
   };
 
   const handleClose = () => setOpen(false);
 
-  const handleSave = () => {
+  // 3. ບັນທຶກ ຫຼື ອັບເດດຂໍ້ມູນ
+  const handleSave = async () => {
+    if (!formData.name || !formData.email) return alert('ກະລຸນາກອກຂໍ້ມູນໃຫ້ຄົບ!');
+
+    const payload = {
+      name_lao: formData.name,
+      name_eng: formData.nameEng,
+      gender: formData.gender,
+      phone: formData.phone,
+      email: formData.email,
+      image: imageUrl || formData.image, // ໃຊ້ URL ໃໝ່ ຫຼື ໃຊ້ຮູບເກົ່າຖ້າບໍ່ມີການປ່ຽນ
+      status: formData.status,
+      permission_role: formData.permission,
+      password: formData.password,
+    };
+
     if (isEdit) {
-      setRows(rows.map(r => r.id === formData.id ? formData : r));
+      const { error } = await supabase
+        .from("permissions")
+        .update(payload)
+        .eq('id', editId);
+
+      if (!error) {
+        getdata();
+        handleClose();
+      } else {
+        alert("ແກ້ໄຂບໍ່ສຳເລັດ: " + error.message);
+      }
     } else {
-      setRows([...rows, { ...formData, id: rows.length + 1 }]);
+      const { error } = await supabase
+        .from("permissions")
+        .insert([payload]);
+
+      if (!error) {
+        getdata();
+        handleClose();
+      } else {
+        alert("ບັນທຶກບໍ່ສຳເລັດ: " + error.message);
+      }
     }
-    handleClose();
   };
 
-  // 4. Columns ຂອງຕາລາງ
+  const handleEdit = (row) => {
+    setEditId(row.id);
+    setFormData({
+      name: row.name_lao,
+      nameEng: row.name_eng,
+      gender: row.gender,
+      phone: row.phone,
+      email: row.email,
+      image: row.image,
+      status: row.status,
+      permission: row.permission_role,
+      password: row.password,
+    });
+    setImageUrl(row.image);
+    setIsEdit(true);
+    setOpen(true);
+  };
+
+  const handleDelete = async (id) => {
+    if (window.confirm("ທ່ານຕ້ອງການລຶບຂໍ້ມູນນີ້ແທ້ຫຼືບໍ່?")) {
+      const { error } = await supabase.from("permissions").delete().eq('id', id);
+      if (!error) {
+        setRows((prev) => prev.filter((r) => r.id !== id));
+      } else {
+        alert("ລຶບບໍ່ສຳເລັດ: " + error.message);
+      }
+    }
+  };
+
   const columns = [
-    { field: 'id', headerName: 'ລຳດັບ', width: 70 },
-    { field: 'name', headerName: 'ຊື່ ນາມສະກຸນ', width: 150 },
-    { field: 'nameEng', headerName: 'ຊື່ ນາມສະກຸນ-ອັງກິດ', width: 160 },
-    { field: 'gender', headerName: 'ເພດ', width: 80 },
-    { field: 'phone', headerName: 'ເບີໂທ', width: 150 },
-    { field: 'email', headerName: 'ອີເມວ', width: 160 },
-    { field: 'status', headerName: 'ສະຖານະ', width: 120 },
-    { field: 'permission', headerName: 'ສິດທິນຳໃຊ້', width: 100 },
+    { field: 'id', headerName: 'ID', width: 70 },
     { 
-      field: 'actions', headerName: 'ຈັດການ', width: 180, sortable: false, 
+      field: 'image', 
+      headerName: 'ຮູບພາບ', 
+      width: 80,
+      renderCell: (params) => (
+        <Box sx={{ display: 'flex', alignItems: 'center', height: '100%' }}>
+          <Avatar src={params.value} sx={{ width: 40, height: 40, border: '1px solid #ddd' }} />
+        </Box>
+      )
+    },
+    { field: 'name_lao', headerName: 'ຊື່ ນາມສະກຸນ', width: 150 },
+    { field: 'name_eng', headerName: 'ຊື່ ນາມສະກຸນ-ອັງກິດ', width: 160 },
+    { field: 'gender', headerName: 'ເພດ', width: 80 },
+    { field: 'phone', headerName: 'ເບີໂທ', width: 120 },
+    { field: 'email', headerName: 'ອີເມວ', width: 160 },
+    { field: 'permission_role', headerName: 'ສິດທິນຳໃຊ້', width: 120 },
+    { 
+      field: 'actions', 
+      headerName: 'ຈັດການ', 
+      width: 180, 
       renderCell: (params) => (
         <Box sx={{ display: 'flex', gap: 1, height: '100%', alignItems: 'center' }}>
-          <button 
-            onClick={() => handleEdit(params.row)}
-            style={{ padding: '5px 10px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', width: '70px', height: '32px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-          >
-            ແກ້ໄຂ
-          </button>
-          <button 
-            onClick={() => setRows(rows.filter(r => r.id !== params.row.id))} 
-            style={{ padding: '5px 10px', backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', width: '70px', height: '32px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-          >
-            ລຶບ
-          </button>
+          <Button variant="contained" color="success" size="small" onClick={() => handleEdit(params.row)}>ແກ້ໄຂ</Button>
+          <Button variant="contained" color="error" size="small" onClick={() => handleDelete(params.row.id)}>ລຶບ</Button>
         </Box>
       ),
     },
   ];
 
+  if (!isClient) return null;
+
   return (
-    <div>
-      <div className="h-20 w-[100dvw] fixed bg-white ">
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      <div className="fixed w-full z-10">
         <ResponsiveAppBar/>
-         <div className="h-[100dvh] w-[100dvw] border ">
-  <div>
-    <div className="h-[100dvh] w-[80dvw] ml-[240px] pt-20 ">
-      <div className="h-[100dvh] w-[82dvw] mt-16 ">
-        <div className="p-6">
-          <h2 className="text-xl font-semibold mb-4">ຈັດການຂໍ້ມູນສິດນຳໃຊ້</h2>
+      </div>
+
+      <Box sx={{ display: 'flex' }}>
+        <Box sx={{ width: '240px', flexShrink: 0 }}>
+          <Sidebar/>
+        </Box>
+
+        <Box sx={{ flexGrow: 1, p: 3, mt: 15 }}>
+          <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2 }}>
+            ຈັດການຂໍ້ມູນສິດນຳໃຊ້ (Database)
+          </Typography>
+          
           <Button
             variant="contained"
             onClick={handleClickOpen}
@@ -94,85 +201,73 @@ export default function PermissionPage() {
             ເພີ່ມຂໍ້ມູນຜູ້ໃຊ້
           </Button>
 
-          <Paper sx={{ height: 500, width: '100%' }}>
+          <Paper sx={{ height: 550, width: '100%' }}>
             <DataGrid 
               rows={rows} 
               columns={columns}
-              pageSizeOptions={[5, 10]}
+              getRowId={(row) => row.id}
+              initialState={{ pagination: { paginationModel: { pageSize: 10 } } }}
+              pageSizeOptions={[5, 10, 20]}
               disableRowSelectionOnClick
+              rowHeight={60}
             />
           </Paper>
-        </div>
-      </div>
-    </div>
-  </div>
-    </div>
-      </div>
-
-      <div className="h-[100dvh] w-[20dvw] ">
-        <Sidebar/>
-      </div>
+        </Box>
+      </Box>
 
       {/* Dialog Form */}
       <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm">
         <DialogTitle sx={{ bgcolor: '#8B0000', color: 'white' }}>
-          {isEdit ? 'ແກ້ໄຂຂໍ້ມູນ' : 'ຟອມເພີ່ມຂໍ້ມູນສິດນຳໃຊ້'}
+          {isEdit ? 'ແກ້ໄຂຂໍ້ມູນສິດນຳໃຊ້' : 'ຟອມເພີ່ມຂໍ້ມູນສິດນຳໃຊ້'}
         </DialogTitle>
-        <DialogContent sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <TextField 
-            label="ຊື່ສິດນຳໃຊ້ " 
-            fullWidth 
-            variant="outlined"
-            value={formData.name}
-            onChange={(e) => setFormData({...formData, name: e.target.value})}
-          />
-          <TextField 
-            label="ຊື່ສິດນຳໃຊ້ (ອັງກິດ)" 
-            fullWidth 
-            variant="outlined"
-            value={formData.nameEng}
-            onChange={(e) => setFormData({...formData, nameEng: e.target.value})}
-          />
-          <TextField
-            label="ເພດ"
-            select
-            value={formData.gender}
-            onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-            fullWidth
-          >
-            <MenuItem value="ຍິງ">ຍິງ</MenuItem>
-            <MenuItem value="ຊາຍ">ຊາຍ</MenuItem>
-            <MenuItem value="ບໍ່ລະບຸ">ບໍ່ລະບຸ</MenuItem>
-          </TextField>
-          <TextField
-            label="ເບີໂທ"
-            value={formData.phone}
-            onChange={(e) => setFormData({...formData, phone: e.target.value})}
-            fullWidth
-          />
-          <TextField
-            label="ອີເມວ"
-            value={formData.email}
-            onChange={(e) => setFormData({...formData, email: e.target.value})}
-            fullWidth
-          />
-          <TextField
-            label="ສິດທິນຳໃຊ້"
-            select
-            value={formData.permission}
-            onChange={(e) => setFormData({ ...formData, permission: e.target.value })}
-            fullWidth
-          >
+        <DialogContent sx={{ mt: 3, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+          
+          {/* Upload Image Section */}
+          <Box sx={{ textAlign: 'center', mb: 1 }}>
+            <input accept="image/*" style={{ display: 'none' }} id="upload-image" type="file" onChange={handleImageChange} />
+            <label htmlFor="upload-image">
+              <Box sx={{ 
+                width: 100, height: 100, borderRadius: '50%', 
+                border: '2px dashed #8B0000', display: 'flex', 
+                justifyContent: 'center', alignItems: 'center',
+                margin: '0 auto', cursor: 'pointer', overflow: 'hidden'
+              }}>
+                {formData.image ? (
+                  <img src={formData.image} alt="profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  <CloudUploadIcon sx={{ fontSize: 40, color: '#8B0000' }} />
+                )}
+              </Box>
+            </label>
+          </Box>
+
+          <TextField label="ຊື່ສິດນຳໃຊ້" fullWidth value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} />
+          <TextField label="ຊື່ສິດນຳໃຊ້ (ອັງກິດ)" fullWidth value={formData.nameEng} onChange={(e) => setFormData({...formData, nameEng: e.target.value})} />
+          
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <TextField label="ເພດ" select value={formData.gender} onChange={(e) => setFormData({ ...formData, gender: e.target.value })} fullWidth>
+              <MenuItem value="ຍິງ">ຍິງ</MenuItem>
+              <MenuItem value="ຊາຍ">ຊາຍ</MenuItem>
+              <MenuItem value="ບໍ່ລະບຸ">ບໍ່ລະບຸ</MenuItem>
+            </TextField>
+            <TextField label="ເບີໂທ" value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} fullWidth />
+          </Box>
+
+          <TextField label="ອີເມວ" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} fullWidth />
+
+          <TextField label="ສິດທິນຳໃຊ້" select value={formData.permission} onChange={(e) => setFormData({ ...formData, permission: e.target.value })} fullWidth>
             <MenuItem value="ອາດີດນັກສຶກສາ">ອາດີດນັກສຶກສາ</MenuItem>
             <MenuItem value="SuperAdmin">SuperAdmin</MenuItem>
             <MenuItem value="ຄະນະບໍດີ">ຄະນະບໍດີ</MenuItem>
           </TextField>
-          {/* ທ່ານສາມາດເພີ່ມ TextField ອື່ນໆ ໄດ້ທີ່ນີ້ໃນລັກສະນະດຽວກັນ */}
+
+          <TextField label="ລະຫັດຜ່ານ" type="password" fullWidth value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} />
+
         </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
-          <Button onClick={handleClose} color="inherit">ຍົກເລີກ</Button>
-          <Button onClick={handleSave} variant="contained" color="success">
-            {isEdit ? 'ອັບເດດຂໍ້ມູນ' : 'ບັນທຶກຂໍ້ມູນ'}
+        <DialogActions sx={{ p: 3 }}>
+          <Button onClick={handleClose} variant="outlined" color="inherit">ຍົກເລີກ</Button>
+          <Button onClick={handleSave} variant="contained" color="success" sx={{ px: 4 }}>
+            {isEdit ? 'ອັບເດດ' : 'ບັນທຶກ'}
           </Button>
         </DialogActions>
       </Dialog>

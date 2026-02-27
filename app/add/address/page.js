@@ -2,7 +2,7 @@
 import React from 'react';
 import ResponsiveAppBar from '../../component/nav.js';
 import Sidebar from '../../component/Sidebar.js';
-import { Button, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField } from '@mui/material';
+import { Button, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Box } from '@mui/material';
 import { DataGrid } from '@mui/x-data-grid';
 
 export default function AddressPage() {
@@ -75,83 +75,57 @@ export default function AddressPage() {
       width: 180,
       sortable: false,
       renderCell: (params) => (
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', height: '100%' }}>
-          <button
-            onClick={() => handleEdit(params.row.id)}
-            style={{
-              padding: '5px 10px',
-              backgroundColor: '#4CAF50',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              width: '70px',
-              height: '32px',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', height: '100%' }}>
+          <Button size="small" variant="contained" color="success" onClick={() => handleEdit(params.row.id)}>
             ແກ້ໄຂ
-          </button>
-          <button
-            onClick={() => handleDelete(params.row.id)}
-            style={{
-              padding: '5px 10px',
-              backgroundColor: '#f44336',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              width: '70px',
-              height: '32px',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
+          </Button>
+          <Button size="small" variant="contained" color="error" onClick={() => handleDelete(params.row.id)}>
             ລຶບ
-          </button>
-        </div>
+          </Button>
+        </Box>
       ),
     },
   ];
 
   return (
-    <div>
-      <div className="h-20 w-[100dvw] fixed bg-white ">
-        <ResponsiveAppBar />
-        <div className="h-[100dvh] w-[100dvw] border ">
-          <div>
-            <div className="h-[100dvh] w-[80dvw] ml-[240px] pt-20 ">
-              <div className="h-[100dvh] w-[82dvw] mt-16 ">
-                <div className="p-6">
-                  <h2 className="text-xl font-semibold mb-4">ຈັດການຂໍ້ມູນທີ່ຢູ່</h2>
-                  <Button
-                    variant="contained"
-                    onClick={handleClickOpen}
-                    sx={{ mb: 3, bgcolor: '#8B0000', '&:hover': { bgcolor: '#a00000' } }}
-                  >
-                    ເພີ່ມຂໍ້ມູນທີ່ຢູ່
-                  </Button>
-
-                  <Paper sx={{ height: 500, width: '100%' }}>
-                    <DataGrid rows={rows} columns={columns} pageSizeOptions={[5, 10]} disableRowSelectionOnClick />
-                  </Paper>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="h-[100dvh] w-[20dvw] ">
+    <div className="flex h-screen w-screen overflow-hidden bg-gray-100">
+      <div className="relative z-[100] w-[240px] flex-shrink-0">
         <Sidebar />
       </div>
+      <div className="flex-1 flex flex-col relative">
+        <div className="h-16 w-full flex-shrink-0 relative z-[50]">
+          <ResponsiveAppBar />
+        </div>
+        <main className="flex-1 overflow-y-auto p-6 relative z-10">
+          <div className="bg-white p-6 rounded-lg shadow-md min-h-full">
+            <h2 className="text-xl font-bold mb-6">ຈັດການຂໍ້ມູນທີ່ຢູ່</h2>
+            <div className="mb-10">
+              <Button
+                variant="contained"
+                onClick={handleClickOpen}
+                sx={{ bgcolor: '#8B0000', '&:hover': { bgcolor: '#a00000' } }}
+              >
+                ເພີ່ມຂໍ້ມູນ
+              </Button>
+            </div>
+            <Paper sx={{ height: 600, width: '100%', boxShadow: '0px 2px 4px rgba(0,0,0,0.05)', borderRadius: 2, position: 'relative', zIndex: 1 }}>
+              <DataGrid
+                rows={rows}
+                columns={columns}
+                getRowId={(row) => row.id}
+                initialState={{ pagination: { paginationModel: { page: 0, pageSize: 50 } } }}
+                pageSizeOptions={[10, 25, 50, 100]}
+                disableRowSelectionOnClick
+                sx={{ border: 0, '& .MuiDataGrid-cell:focus': { outline: 'none' } }}
+              />
+            </Paper>
+          </div>
+        </main>
+      </div>
 
-      <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm">
+      <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm" sx={{ zIndex: 1000 }}>
         <DialogTitle sx={{ bgcolor: '#8B0000', color: 'white' }}>
-          {isEdit ? 'ແກ້ໄຂຂໍ້ມູນທີ່ຢູ່' : 'ຟອມເພີ່ມຂໍ້ມູນທີ່ຢູ່'}
+          {isEdit ? 'ແກ້ໄຂຂໍ້ມູນທີ່ຢູ່' : 'ເພີ່ມຂໍ້ມູນທີ່ຢູ່'}
         </DialogTitle>
         <DialogContent sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
           <TextField
@@ -173,7 +147,7 @@ export default function AddressPage() {
             fullWidth
           />
         </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
+        <DialogActions sx={{ p: 3 }}>
           <Button onClick={handleClose} color="inherit">
             ຍົກເລີກ
           </Button>

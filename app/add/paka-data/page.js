@@ -1,151 +1,212 @@
 "use client";
-
-import React from 'react';
-import ResponsiveAppBar from '../../component/nav.js'
-import Sidebar from '../../component/Sidebar.js'
-import { Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem, Button, Paper } from '@mui/material'; 
-import { DataGrid } from '@mui/x-data-grid';
-
+import React from "react";
+import ResponsiveAppBar from "../../component/nav.js";
+import Sidebar from "../../component/Sidebar.js";
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Button,
+  Box,
+  Typography,
+  Paper,
+} from "@mui/material";
+import { DataGrid } from "@mui/x-data-grid";
+import { createClient } from "../../../lib/supabase/client";
+import DeleteIcon from '@mui/icons-material/Delete';
+import EditIcon from '@mui/icons-material/Edit';
 
 export default function PakaDataPage() {
-  const [rows, setRows] = React.useState([
-    { id: 1, fullName: 'ວິສະວະກຳຄອມພິວເຕີ', fullNameEng: 'Computer Engineering' },
-    
-  ]);
+  const supabase = createClient();
+  const [rows, setRows] = React.useState([]);
   const [open, setOpen] = React.useState(false);
   const [isEdit, setIsEdit] = React.useState(false);
   const [editId, setEditId] = React.useState(null);
-  const [formData, setFormData] = React.useState({ fullName: '', fullNameEng: '' });
+  const [formData, setFormData] = React.useState({
+    major_name_lao: "",
+    major_name_eng: "",
+  });
+
+  const fetchData = async () => {
+    const { data, error } = await supabase.from("paka").select("*").order('major_id', { ascending: true });
+    if (data) setRows(data);
+    if (error) console.error("Error fetching:", error);
+  };
+
+  React.useEffect(() => {
+    fetchData();
+  }, []);
 
   const handleClickOpen = () => {
     setIsEdit(false);
-    setFormData({ fullName: '', fullNameEng: '' });
+    setFormData({ major_name_lao: "", major_name_eng: "" });
     setOpen(true);
   };
 
-  const handleClose = () => {
-    setOpen(false);
-    setFormData({ fullName: '', fullNameEng: '' });
-    setIsEdit(false);
-  };
+  const handleClose = () => setOpen(false);
 
-  const handleSave = () => {
-    if (!formData.fullName || !formData.fullNameEng) return alert("ກະລຸນາກອກຊື່ພາກວິຊາພາສາລາວ ແລະ ພາສາອັງກິດ!");
-    
+  const handleSave = async () => {
+    if (!formData.major_name_lao || !formData.major_name_eng)
+      return alert("ກະລຸນາກອກຂໍ້ມູນໃຫ້ຄົບ!");
+
     if (isEdit) {
-      setRows(rows.map(row => row.id === editId ? { ...row, ...formData } : row));
+      const { error } = await supabase
+        .from("paka")
+        .update({ major_name_lao: formData.major_name_lao, major_name_eng: formData.major_name_eng })
+        .eq("major_id", editId);
+      if (!error) fetchData();
     } else {
-      const newRow = { id: rows.length + 1, ...formData };
-      setRows([...rows, newRow]);
+      const { error } = await supabase.from("paka").insert([formData]);
+      if (!error) fetchData();
     }
     handleClose();
   };
 
-  const handleEdit = (id) => {
-    const rowToEdit = rows.find(r => r.id === id);
-    if (rowToEdit) {
-      setFormData(rowToEdit);
-      setEditId(id);
-      setIsEdit(true);
-      setOpen(true);
-    }
-  };
-
-  const handleDelete = (id) => {
-    if (confirm('ທ່ານແນ່ໃຈບໍ່ວ່າຈະລຶບ?')) {
-      setRows(rows.filter(r => r.id !== id));
+  const handleDelete = async (id) => {
+    if (window.confirm("ທ່ານແນ່ໃຈບໍ່ວ່າຈະລຶບຂໍ້ມູນນີ້?")) {
+      const { error } = await supabase.from("paka").delete().eq("major_id", id);
+      if (!error) fetchData();
     }
   };
 
   const columns = [
-    { field: 'id', headerName: 'ລຳດັບ', width: 70 },
-    { field: 'fullName', headerName: 'ຊື່ພາກວິຊາ-ລາວ', width: 200 },
-    { field: 'fullNameEng', headerName: 'ຊື່ພາກວິຊາ-ອັງກິດ', width: 200 },
-    
+    { 
+      field: "index", 
+      headerName: "ລຳດັບ", 
+      width: 80, 
+      align: 'center', 
+      headerAlign: 'center',
+      renderCell: (params) => rows.findIndex((r) => r.major_id === params.row.major_id) + 1
+    },
+    { 
+      field: "major_name_lao", 
+      headerName: "ຊື່ພາກວິຊາ (ລາວ)", 
+      minWidth: 300, // ກຳນົດຄວາມກວ້າງຂັ້ນຕ່ຳເພື່ອໃຫ້ເກີດ Scroll ແນວນອນ
+      flex: 1 
+    },
+    { 
+      field: "major_name_eng", 
+      headerName: "ຊື່ພາກວິຊາ (ENG)", 
+      minWidth: 300, 
+      flex: 1 
+    },
     {
-      field: 'actions',
-      headerName: 'ຈັດການ',
-      width: 150,
+      field: "actions",
+      headerName: "ຈັດການ",
+      width: 200,
       sortable: false,
+      headerAlign: 'center',
+      align: 'center',
       renderCell: (params) => (
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', height: '100%' }}>
-          <button 
-            onClick={() => handleEdit(params.row.id)}
-            style={{ padding: '5px 10px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', width: '70px', height: '32px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+        <Box sx={{ display: "flex", gap: 1, alignItems: "center", height: "100%" }}>
+          <Button 
+            size="small" 
+            variant="contained" 
+            color="success" 
+            startIcon={<EditIcon />} 
+            onClick={() => { setFormData(params.row); setEditId(params.row.major_id); setIsEdit(true); setOpen(true); }}
           >
             ແກ້ໄຂ
-          </button>
-          <button 
-            onClick={() => handleDelete(params.row.id)}
-            style={{ padding: '5px 10px', backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', width: '70px', height: '32px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+          </Button>
+          <Button 
+            size="small" 
+            variant="contained" 
+            color="error" 
+            startIcon={<DeleteIcon />} 
+            onClick={() => handleDelete(params.row.major_id)}
           >
             ລຶບ
-          </button>
-        </div>
+          </Button>
+        </Box>
       ),
     },
   ];
 
   return (
-    <div>
-      <div className="h-20 w-[100dvw] fixed bg-white ">
-        <ResponsiveAppBar/>
-         <div className="h-[100dvh] w-[100dvw] border ">
-  <div>
-    <div className="h-[100dvh] w-[80dvw] ml-[240px] pt-20 ">
-      <div className="h-[100dvh] w-[82dvw] mt-16 ">
-        <div className="p-6">
-          <h2 className="text-xl font-semibold mb-4">ຈັດການຂໍ້ມູນພາກວິຊາ</h2>
-          <Button
-            variant="contained"
-            onClick={handleClickOpen}
-            sx={{ mb: 3, bgcolor: '#8B0000', '&:hover': { bgcolor: '#a00000' } }}
-          >
-            ເພີ່ມຂໍ້ມູນພາກວິຊາ
-          </Button>
+    <div className="flex h-screen w-screen overflow-hidden bg-gray-50">
+      <Sidebar />
 
-          <Paper sx={{ height: 500, width: '100%' }}>
-            <DataGrid 
-              rows={rows} 
-              columns={columns}
-              pageSizeOptions={[5, 10]}
-              disableRowSelectionOnClick
-            />
-          </Paper>
-        </div>
-      </div>
-    </div>
-  </div>
-    </div>
+      <div className="flex-1 flex flex-col min-w-0">
+        <ResponsiveAppBar />
+
+        <main className="flex-1 overflow-hidden p-4 md:p-8">
+          <Box component="main" sx={{ flexGrow: 1, p: 3, mt: 10, ml: { sm: '0px' }, height: '100%', display: 'flex', flexDirection: 'column' }}>
+            
+            <Box sx={{ flexShrink: 0 }}>
+              <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 3 }}>ຈັດການຂໍ້ມູນພາກວິຊາ</Typography>
+              <Button
+                variant="contained"
+                onClick={handleClickOpen}
+                sx={{ mb: 3, bgcolor: '#8B0000', '&:hover': { bgcolor: '#a00000' } }}
+              >
+                ເພີ່ມຂໍ້ມູນ
+              </Button>
+            </Box>
+
+            {/* ສ່ວນຕາລາງທີ່ແກ້ໄຂໃຫ້ເຕັມ ແລະ Scroll ໄດ້ */}
+            <Paper 
+              sx={{ 
+                flexGrow: 1, // ໃຫ້ Paper ຍືດເຕັມເນື້ອທີ່ທີ່ເຫຼືອ
+                width: '100%', 
+                overflow: 'hidden', 
+                display: 'flex', 
+                flexDirection: 'column',
+                border: '1px solid #eee',
+                borderRadius: 2
+              }}
+            >
+              <DataGrid
+                rows={rows}
+                columns={columns}
+                getRowId={(row) => row.major_id}
+                initialState={{ pagination: { paginationModel: { pageSize: 10 } } }}
+                pageSizeOptions={[10, 25, 50]}
+                disableRowSelectionOnClick
+                sx={{
+                  border: 0,
+                  "& .MuiDataGrid-main": {
+                    overflow: 'auto', // ຈຸດສຳຄັນ: ເປີດ Scroll ທັງສອງແກນ
+                  },
+                  "& .MuiDataGrid-columnHeaders": {
+                    bgcolor: "#f8f9fa",
+                    fontWeight: "bold",
+                    borderBottom: '2px solid #eee',
+                  },
+                  "& .MuiDataGrid-cell": {
+                    borderRight: '1px solid #f0f0f0',
+                  },
+                  "& .MuiDataGrid-cell:focus": { outline: "none" },
+                }}
+              />
+            </Paper>
+
+          </Box>
+        </main>
       </div>
 
-      <div className="h-[100dvh] w-[20dvw] ">
-        <Sidebar/>
-      </div>
-
+      {/* Dialog Area */}
       <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm">
-        <DialogTitle sx={{ bgcolor: '#8B0000', color: 'white' }}>
-          {isEdit ? 'ແກ້ໄຂຂໍ້ມູນ' : 'ຟອມເພີ່ມຂໍ້ມູນພາກວິຊາ'}
+        <DialogTitle sx={{ bgcolor: "#8B0000", color: "white" }}>
+          {isEdit ? "ແກ້ໄຂຂໍ້ມູນພາກວິຊາ" : "ເພີ່ມຂໍ້ມູນພາກວິຊາໃໝ່"}
         </DialogTitle>
-        <DialogContent sx={{ mt: 2 }}>
+        <DialogContent sx={{ mt: 2, display: "flex", flexDirection: "column", gap: 3 }}>
           <TextField 
-            margin="dense" 
-            label="ຊື່ພາກວິຊາ" 
+            label="ຊື່ພາກວິຊາ (ພາສາລາວ)" 
             fullWidth 
-            value={formData.fullName}
-            onChange={(e) => setFormData({...formData, fullName: e.target.value})}
+            value={formData.major_name_lao} 
+            onChange={(e) => setFormData({ ...formData, major_name_lao: e.target.value })} 
           />
           <TextField 
-            margin="dense" 
-            label="ຊື່ພາກວິຊາພາສາອັງກິດ" 
+            label="ຊື່ພາກວິຊາ (ພາສາອັງກິດ)" 
             fullWidth 
-            value={formData.fullNameEng}
-            onChange={(e) => setFormData({...formData, fullNameEng: e.target.value})}
-      
+            value={formData.major_name_eng} 
+            onChange={(e) => setFormData({ ...formData, major_name_eng: e.target.value })} 
           />
         </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
-          <Button onClick={handleClose}>ຍົກເລີກ</Button>
+        <DialogActions sx={{ p: 3 }}>
+          <Button onClick={handleClose} variant="outlined" color="inherit">ຍົກເລີກ</Button>
           <Button onClick={handleSave} variant="contained" color="success">ບັນທຶກຂໍ້ມູນ</Button>
         </DialogActions>
       </Dialog>
